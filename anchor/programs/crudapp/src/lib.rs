@@ -2,69 +2,99 @@
 
 use anchor_lang::prelude::*;
 
-declare_id!("coUnmi3oBUtwtd9fjeAvSsJssXh5A5xyPbhpewyzRVF");
+declare_id!("AVyXCfFBjbeKbm7bhBMeEmWRz1v6gNw24w2YNyYNdvhr");
 
 #[program]
 pub mod crudapp {
     use super::*;
 
-  pub fn close(_ctx: Context<CloseCrudapp>) -> Result<()> {
-    Ok(())
-  }
+    pub fn create_journal_entry(ctx:Context <CreateEntry>, title:String,message:String ) -> Result<()> {
+          let journal_entry = &mut ctx.accounts.journal_entry;
+            journal_entry.owner = *ctx.accounts.owner.key;  // set the owner of the journal entry
+            journal_entry.title = title; // set the title of the journal entry
+            journal_entry.message = message; // set the message of the journal entry
+            Ok(())
+    }
+  
+    pub fn update_journal_entry(ctx:Context<UpdateEntry> ,
+        _title:String ,message:String) -> Result<()> {
+        let journal_entry = &mut ctx.accounts.journal_entry;
+        // if journal_entry.owner != *ctx.accounts.owner.key {
+        //     return Err(ErrorCode::Unauthorized.into());
+        // }
+        journal_entry.message = message;
+        Ok(())
+    }
 
-  pub fn decrement(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.crudapp.count = ctx.accounts.crudapp.count.checked_sub(1).unwrap();
-    Ok(())
-  }
+    pub fn delete_journal_entry(_ctx:Context<DeleteEntry>, _title:String) -> Result<()> {
+        Ok(())
+    }
+}
 
-  pub fn increment(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.crudapp.count = ctx.accounts.crudapp.count.checked_add(1).unwrap();
-    Ok(())
-  }
 
-  pub fn initialize(_ctx: Context<InitializeCrudapp>) -> Result<()> {
-    Ok(())
-  }
 
-  pub fn set(ctx: Context<Update>, value: u8) -> Result<()> {
-    ctx.accounts.crudapp.count = value.clone();
-    Ok(())
-  }
+#[derive(Accounts)]
+#[instruction(title:String)]
+pub struct CreateEntry<'info>{
+    #[account(
+        init,
+        seeds = [title.as_bytes() , owner.key().as_ref()], // since we have PDA for this account we need to provide seeds,seed is used to generate the PDA address for the account.
+        bump, // bump 
+        payer = owner,
+        space = 8 + JournalEntryState::INIT_SPACE,
+    )]
+    pub journal_entry: Account<'info, JournalEntryState>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct InitializeCrudapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
+#[instruction(title:String)]
+pub struct UpdateEntry<'info>{
 
+    #[account(
+        mut,
+        seeds = [title.as_bytes() , owner.key().as_ref()],
+        bump,
+        realloc = 8 + JournalEntryState::INIT_SPACE,
+        realloc::payer = owner,
+        realloc::zero = true,
+    )]
+
+    pub journal_entry: Account<'info, JournalEntryState>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(title:String)]
+pub struct DeleteEntry<'info>{
   #[account(
-  init,
-  space = 8 + Crudapp::INIT_SPACE,
-  payer = payer
-  )]
-  pub crudapp: Account<'info, Crudapp>,
-  pub system_program: Program<'info, System>,
-}
-#[derive(Accounts)]
-pub struct CloseCrudapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
+        mut,
+        seeds = [title.as_bytes() , owner.key().as_ref()],
+        bump,
+        close = owner,      
+    )]
+    pub journal_entry: Account<'info, JournalEntryState>, 
 
-  #[account(
-  mut,
-  close = payer, // close account and return lamports to payer
-  )]
-  pub crudapp: Account<'info, Crudapp>,
-}
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
 
-#[derive(Accounts)]
-pub struct Update<'info> {
-  #[account(mut)]
-  pub crudapp: Account<'info, Crudapp>,
 }
 
 #[account]
 #[derive(InitSpace)]
-pub struct Crudapp {
-  count: u8,
+pub struct JournalEntryState {
+    pub owner:Pubkey,
+    #[max_len(50)]
+    pub title: String,
+    #[max_len(1000)]
+    pub message: String,
 }
+
